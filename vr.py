@@ -464,4 +464,4 @@ def main(page : ft.Page):
     page.update()
 
 
-ft.app(target=main, view = None)
+ft.app(target=main, view = ft.WEB_BROWSER)
