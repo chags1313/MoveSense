@@ -464,4 +464,4 @@ def main(page : ft.Page):
     page.update()
 
 
-ft.app(target=main, port=os.getenv("PORT"), assets_dir="")
+ft.app(target=main, port=os.getenv("PORT"))
