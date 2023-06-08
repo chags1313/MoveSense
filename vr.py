@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import cv2
 import base64
-import plotly.express as px
+import os
 
 def hex_to_rgb(hex_string):
     r_hex = hex_string[1:3]
@@ -464,4 +464,4 @@ def main(page : ft.Page):
     page.update()
 
 
-ft.app(target=main)
+ft.app(target=main, port=os.getenv("PORT"))
