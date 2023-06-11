@@ -1,6 +1,5 @@
 flet
-mediapipe==0.9.0.1
 opencv-python-headless
-plotly
+mediapipe==0.9.0.1
 pandas
 numpy
