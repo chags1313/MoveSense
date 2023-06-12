@@ -1,5 +1,4 @@
 flet
 opencv-python-headless
-mediapipe==0.9.0.1
 pandas
 numpy
