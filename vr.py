@@ -1,7 +1,6 @@
 import flet as ft
 import threading
 import time
-import mediapipe as mp
 import numpy as np
 import pandas as pd
 import cv2
@@ -15,202 +14,86 @@ def hex_to_rgb(hex_string):
     return int(r_hex, 16), int(g_hex, 16), int(b_hex, 16)
 
 cap = None
+ret = False
+frame = None
 stop_recording = False
 
-def process(cap=cap):
-    # Define mediapipe pose detection module
-    mp_pose = mp.solutions.pose
-    mp_drawing = mp.solutions.drawing_utils
+def process(cap = cap, ret = ret, frame = frame):
+    BODY_PARTS = {"Nose": 0, "Neck": 1, "RShoulder": 2, "RElbow": 3, "RWrist": 4,
+                "LShoulder": 5, "LElbow": 6, "LWrist": 7, "RHip": 8, "RKnee": 9,
+                "RAnkle": 10, "LHip": 11, "LKnee": 12, "LAnkle": 13, "REye": 14,
+                "LEye": 15, "REar": 16, "LEar": 17, "Background": 18}
+    BODY_PARTS_DICT = {0: 'Nose', 1: 'Neck', 2: "RShoulder", 3: "RElbow", 4: "RWrist",
+                5: "LShoulder", 6: "LElbow", 7: "LWrist", 8: "RHip", 9: "RKnee",
+                10: "RAnkle", 11: "LHip", 12: "LKnee", 13: "LAnkle", 14: "REye",
+                15: "LEye", 16: "REar", 17: "LEar", 18: "Background"}
 
-    # Initialize the pose detection module
-    with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-        # Create a dataframe to store the pose keypoints
-        df_pose = pd.DataFrame()
+    POSE_PAIRS = [["Neck", "RShoulder"], ["Neck", "LShoulder"], ["RShoulder", "RElbow"],
+                ["RElbow", "RWrist"], ["LShoulder", "LElbow"], ["LElbow", "LWrist"],
+                ["RShoulder", "RHip"], ["RHip", "RKnee"], ["RKnee", "RAnkle"], ["LShoulder", "LHip"],
+                ["LHip", "LKnee"], ["LKnee", "LAnkle"], ["Neck", "Nose"], ["Nose", "REye"],
+                ["REye", "REar"], ["Nose", "LEye"], ["LEye", "LEar"]]
 
-        frame_rate = cap.get(cv2.CAP_PROP_FPS)  # Get the frame rate of the video
-        capture_interval = int(frame_rate / 10)  # Capture a frame every second
-        frame_count = 0
-        image_list = []
+    inWidth = 368
+    inHeight = 368
+    thresh = 0.1
 
-        while True:
-            # Read a frame from the video
-            ret, frame = cap.read()
-
-            # Break the loop if we have reached the end of the video or stop button is clicked
-            if not ret or stop_recording:
-                break
-
-            frame_count += 1
-
-            # Check if the frame count matches the capture interval
-            if frame_count % capture_interval != 0:
-                continue
-
-            # Convert the frame to RGB and resize if needed
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-            # Process the frame to extract the pose keypoints
-            results = pose.process(frame)
-
-            # Extract the pose landmarks from the results
-            landmarks = results.pose_landmarks
-
-            # If landmarks are detected, draw them on the frame
-            if landmarks is not None:
-
-                # Draw the landmarks on the frame
-                mp_drawing.draw_landmarks(frame, landmarks, mp_pose.POSE_CONNECTIONS,
-                                           landmark_drawing_spec=mp_drawing.DrawingSpec(color=(128, 128, 128),
-                                                                                         circle_radius=0),
-                                           connection_drawing_spec=mp_drawing.DrawingSpec(color=(255, 255, 255),
-                                                                                           thickness=2))
-
-                # Add joint markers and lines
-                joint_indices = {'Left Shoulder': 11, 'Left Elbow': 13, 'Left Wrist': 15,
-                                 'Right Shoulder': 12, 'Right Elbow': 14, 'Right Wrist': 16,
-                                 'Right Index': 20, 'Left Index': 19,
-                                 'Left Hip': 23, 'Left Knee': 25, 'Left Ankle': 27,
-                                 'Right Hip': 24, 'Right Knee': 26, 'Right Ankle': 28,
-                                 'Right Foot Index': 32, 'Left Foot Index': 31}
-                color_discrete_map={
-                                    'Right Shoulder': '#ff8000',
-                                    'Right Elbow': '#ffb266', 
-                                    'Right Wrist': '#ffe5cc', 
-                                    'Left Shoulder': '#ff0000',
-                                    'Left Elbow': '#ff6666', 
-                                    'Left Wrist': '#ffcccc',
-                                    'Right Hip': '#7f00ff',
-                                    'Right Knee': '#b266ff', 
-                                    'Right Ankle': '#e5ccff',
-                                    'Left Hip': '#0000ff',
-                                    'Left Knee': '#6666ff', 
-                                    'Left Ankle': '#ccccff'
-                                    }
-
-                for joint, idx in joint_indices.items():
-                    x, y = int(landmarks.landmark[idx].x * frame.shape[1]), int(landmarks.landmark[idx].y * frame.shape[0])
-
-                    # Assign colors to joint markers
-                    if 'Left Shoulder' in joint:
-                        color = hex_to_rgb(color_discrete_map['Left Shoulder']) # Red
-                    elif 'Left Elbow' in joint:
-                        color = hex_to_rgb(color_discrete_map['Left Elbow'])  # Orange
-                    elif 'Left Wrist' in joint:
-                        color = hex_to_rgb(color_discrete_map['Left Wrist'])  # White
-                    if 'Right Shoulder' in joint:
-                        color = hex_to_rgb(color_discrete_map['Right Shoulder'])  # Red
-                    elif 'Right Elbow' in joint:
-                        color = hex_to_rgb(color_discrete_map['Right Elbow'])
-                    elif 'Right Wrist' in joint:
-                        color = hex_to_rgb(color_discrete_map['Right Wrist'])
-                    elif 'Left Hip' in joint:
-                        color = hex_to_rgb(color_discrete_map['Left Hip'])
-                    elif 'Left Knee' in joint:
-                        color = hex_to_rgb(color_discrete_map['Left Knee'])
-                    elif 'Left Ankle' in joint:
-                        color = hex_to_rgb(color_discrete_map['Left Ankle'])
-                    elif 'Right Hip' in joint:
-                        color = hex_to_rgb(color_discrete_map['Right Hip'])
-                    elif 'Right Knee' in joint:
-                        color = hex_to_rgb(color_discrete_map['Right Knee'])
-                    elif 'Right Ankle' in joint:
-                        color = hex_to_rgb(color_discrete_map['Right Ankle'])
-
-                    # Draw joint markers
-                    cv2.circle(frame, (x, y), 2, color, -1)
-                    def calculate_angle(landmarks, joint1, joint2, joint3):
-                        # Get the landmarks for the specified joints
-                        landmark1 = landmarks.landmark[joint_indices[joint1]]
-                        landmark2 = landmarks.landmark[joint_indices[joint2]]
-                        landmark3 = landmarks.landmark[joint_indices[joint3]]
-
-                        # Calculate the vectors between the landmarks
-                        vector1 = np.array([landmark1.x, landmark1.y])
-                        vector2 = np.array([landmark2.x, landmark2.y])
-                        vector3 = np.array([landmark3.x, landmark3.y])
-
-                        # Calculate the vectors between joints
-                        v1 = vector1 - vector2
-                        v2 = vector3 - vector2
-
-                        # Calculate the angle using dot product and magnitudes
-                        angle = np.arccos(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
-
-                        return np.degrees(angle)
-
-                    # Calculate and display joint angles
-                    if joint == 'Left Shoulder':
-                        angle = calculate_angle(landmarks, 'Left Elbow', 'Left Shoulder', 'Left Hip')
-                    elif joint == 'Left Elbow':
-                        angle = calculate_angle(landmarks, 'Left Shoulder', 'Left Elbow', 'Left Wrist')
-                    elif joint == 'Left Wrist':
-                        angle = calculate_angle(landmarks, 'Left Elbow', 'Left Wrist', 'Left Index')
-                    elif joint == 'Right Shoulder':
-                        angle = calculate_angle(landmarks, 'Right Elbow', 'Right Shoulder', 'Right Hip')
-                    elif joint == 'Right Elbow':
-                        angle = calculate_angle(landmarks, 'Right Shoulder', 'Right Elbow', 'Right Wrist')
-                    elif joint == 'Right Wrist':
-                        angle = calculate_angle(landmarks, 'Right Elbow', 'Right Wrist', 'Right Index')
-                    elif joint == 'Left Hip':
-                        angle = calculate_angle(landmarks, 'Left Knee', 'Left Hip', 'Left Shoulder')
-                    elif joint == 'Left Knee':
-                        angle = calculate_angle(landmarks, 'Left Hip', 'Left Knee', 'Left Ankle')
-                    elif joint == 'Left Ankle':
-                        angle = calculate_angle(landmarks, 'Left Knee', 'Left Ankle', 'Left Foot Index')
-                    elif joint == 'Right Hip':
-                        angle = calculate_angle(landmarks, 'Right Knee', 'Right Hip', 'Right Shoulder')
-                    elif joint == 'Right Knee':
-                        angle = calculate_angle(landmarks, 'Right Hip', 'Right Knee', 'Right Ankle')
-                    elif joint == 'Right Ankle':
-                        angle = calculate_angle(landmarks, 'Right Knee', 'Right Ankle', 'Right Foot Index')
-                    elif joint == 'Right Foot Index':
-                        angle = ''
-                    elif joint == 'Left Foot Index':
-                        angle = ''
-                    elif joint == 'Right Index':
-                        angle = ''
-                    elif joint == 'Left Index':
-                        angle = ''
-                    angletextcolor = 'White'
-                    textscale = 1
-                    textsize = 1
-                    try:
-                        if angletextcolor == 'Grey':
-                            cv2.putText(frame, f'{angle:.2f}', (x + 10, y + 10), cv2.FONT_HERSHEY_SIMPLEX, textscale, (128, 128, 128), textsize)
-                        if angletextcolor == 'White':
-                            cv2.putText(frame, f'{angle:.2f}', (x + 10, y + 10), cv2.FONT_HERSHEY_SIMPLEX, textscale, (255, 255, 255), textsize)
-                        if angletextcolor == 'Black':
-                            cv2.putText(frame, f'{angle:.2f}', (x + 10, y + 10), cv2.FONT_HERSHEY_SIMPLEX, textscale, (0, 0, 0), textsize)
-                    except:
-                        continue
+    net = cv2.dnn.readNetFromTensorflow("graph_opt.pb")
 
 
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-            image_list.append(frame)
+    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (0, 255, 255),
+            (255, 0, 255), (128, 0, 0), (0, 128, 0), (0, 0, 128), (128, 128, 0),
+            (0, 128, 128), (128, 0, 128), (64, 0, 0), (0, 64, 0), (0, 0, 64),
+            (64, 64, 0), (0, 64, 64), (64, 0, 64)]
 
-            # Create a dictionary to store the pose landmarks
-            landmarks_dict = {}
 
-            # If landmarks are detected, store them in the dictionary
-            if landmarks is not None:
-                for idx, landmark in enumerate(landmarks.landmark):
-                    landmarks_dict[f'landmark_{idx}'] = [landmark.x, landmark.y, landmark.z, landmark.visibility]
 
-            # Add the landmarks to the dataframe
-            df_pose = df_pose.append(landmarks_dict, ignore_index=True)
-    
-            #output.release()
-            
-            # Convert the dataframe to seconds
-            df_pose['Frame'] = df_pose.index / 10
-            #diff = df_pose['Frame'].iloc[1] - df_pose['Frame'].iloc[0]
-            data_points = len(df_pose)
-            #time_interval = pd.Timedelta(seconds=diff)
+    frameWidth = frame.shape[1]
+    frameHeight = frame.shape[0]
 
-            #df_pose['time'] = pd.date_range(start='00:00:00', periods=data_points, freq=time_interval)
-            #df_pose = df_pose.set_index('time')
-            #print(landmarks_dict)
-            return frame, df_pose
+    net.setInput(cv2.dnn.blobFromImage(frame, 1.0, (frameWidth, frameHeight), (127.5, 127.5, 127.5), swapRB=True, crop=False))
+    out = net.forward()
+    out = out[:, :19, :, :]  # MobileNet output [1, 57, -1, -1], we only need the first 19 elements
+
+    assert (len(BODY_PARTS) == out.shape[1])
+
+    points = []
+    points_dict = {}
+    for i in range(len(BODY_PARTS)):
+        # Slice heatmap of corresponding body part.
+        heatMap = out[0, i, :, :]
+
+        # Originally, we try to find all the local maximums. To simplify a sample
+        # we just find a global one. However, only a single pose at the same time
+        # could be detected this way.
+        _, conf, _, point = cv2.minMaxLoc(heatMap)
+        x = (frameWidth * point[0]) / out.shape[3]
+        y = (frameHeight * point[1]) / out.shape[2]
+        # Add a point if its confidence is higher than the threshold.
+        points.append((int(x), int(y)) if conf > thresh else None)
+        points_dict.update({f'{BODY_PARTS_DICT[i]}_x': [f'{int(x)}'],
+                            f'{BODY_PARTS_DICT[i]}_y': [f'{int(y)}'],
+                            f'{BODY_PARTS_DICT[i]}_conf': [f'{int(conf)}']})
+    #print(points_dict)
+
+    for pair in POSE_PAIRS:
+        partFrom = pair[0]
+        partTo = pair[1]
+        assert (partFrom in BODY_PARTS)
+        assert (partTo in BODY_PARTS)
+
+        idFrom = BODY_PARTS[partFrom]
+        idTo = BODY_PARTS[partTo]
+
+        if points[idFrom] and points[idTo]:
+            cv2.line(frame, points[idFrom], points[idTo], (255, 255, 255), 2)
+            cv2.ellipse(frame, points[idFrom], (3, 3), 0, 0, 360, colors[idFrom], cv2.FILLED)
+            cv2.ellipse(frame, points[idTo], (3, 3), 0, 0, 360, colors[idTo], cv2.FILLED)
+
+    t, _ = net.getPerfProfile()
+    freq = cv2.getTickFrequency() / 1000
+    frame = cv2.putText(frame, '%.2fms' % (t / freq), (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
+    return frame, None
         
 def calculate_joint_angles(df_pose):
     # Define the joint angle calculation function
@@ -264,17 +147,22 @@ def main(page : ft.Page):
             # Capture frame-by-frame
             ret, frame = cap.read()
             if ret == True and play == True:
-                frame, data = process(cap = cap)
+                frame, data = process(cap = cap, frame = frame, ret = ret)
                 datas = pd.concat([data, datas], ignore_index=True)
                 # encode the resulting frame
-                jpg_img = cv2.imencode('.jpg', frame)
-                if jpg_img is not None:
-                    b64_string = base64.b64encode(jpg_img[1]).decode('utf-8')
-                    image_box.src_base64 = b64_string
-                    page.update()
+                if frame is not None:
+                    jpg_img = cv2.imencode('.jpg', frame)
+                    if jpg_img is not None:
+                        b64_string = base64.b64encode(jpg_img[1]).decode('utf-8')
+                        image_box.src_base64 = b64_string
+                        page.update()
+                    else:
+                        break
+                else:
+                    #page.session.set("data", datas)
+                    #print(page.session.get('data'))
+                    break
             else:
-                #page.session.set("data", datas)
-                #print(page.session.get('data'))
                 break
             page.session.set('play_state', False)
             time.sleep(1/115)
